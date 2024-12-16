@@ -1,0 +1,122 @@
+---
+title: "Homework 5"
+output: github_document
+---
+
+```{r}
+library(tidyverse)
+library(faraway)
+library(MASS)
+```
+
+```{r}
+# import and clean data
+states = as.data.frame(datasets::state.x77) |> 
+  janitor::clean_names() 
+
+# create a column for state names
+states$state = rownames(states)
+
+head(states)
+```
+
+*   population: population estimate   
+*   income: per capita income   
+*   illiteracy: illiteracy (%)    
+*   life_exp: life expectancy (years)   
+*   murder: murder and non-negligent manslaughter rate per 100,000 population   
+*   hs_grad: high-school graduates (%)    
+*   frost: mean number of days with minimum temperature below freezing in capital or large city   
+*   area: land area (sq. miles)   
+
+# Problem 1
+
+## part a
+Provide descriptive statistics for all variables of interest (continuous and categorical).
+
+```{r}
+summary(states)
+```
+
+## part b
+Examine exploratory plots, e.g., scatter plots, histograms, box-plots to get a sense of the data and possible variable transformations. (Be selective! Even if you create 20 plots, you don't want to show them all). If you find a transformation to be necessary or recommended, perform the transformation and use it through the rest of the problem.
+
+```{r}
+ggplot(states, aes(x = income)) +
+  geom_histogram(binwidth = 500, fill = "skyblue", color = "black") +
+  labs(
+    title = "Histograms of Income", 
+    x = "Per Capita Income", 
+    y = "Frequency")
+```
+
+```{r}
+ggplot(states, aes(x = income, y = life_exp)) +
+  geom_point(color = "blue") +
+  geom_smooth(method = "lm", color = "red") +
+  labs(
+    title = "Life Expectancy vs. Income", 
+    x = "Per Capita Income",
+    y = "Life Expectancy")
+```
+
+```{r}
+ggplot(states, aes(y = murder)) +
+  geom_boxplot(fill = "orange") +
+  labs(
+    title = "Boxplot of Murder Rates", 
+    y = "Murder Rate (per 100,000)")
+```
+
+
+```{r}
+states = states |> 
+  mutate(log_population = log(population), 
+         log_area = log(area))
+
+ggplot(states, aes(x = log_population, y = life_exp)) +
+  geom_point(color = "purple", alpha = 0.7) +
+  geom_smooth(method = "lm", color = "darkgreen", se = FALSE) +
+  labs(
+    title = "Log Population vs. Life Expectancy", 
+    y = "Life Expectancy"
+  )
+```
+
+## part c
+Use automatic procedures to find a 'best subset' of the full model. Present the results and comment on the following: 
+
+*   Do the procedures generate the same model?    
+*   Are any variables a close call? What was you decision: keep or discard?    Provide arguments for your choice. (Note: this question might have more or less relevance depending on the 'subset' you choose).    
+*   Is there any association between 'Illiteracy' and 'HS graduation rate'? Does your 'subset' contain both?
+
+```{r}
+
+```
+
+## part d
+Use criterion-based procedures to guide your selection of the 'best subset'. Summarize your results (tabular or graphical).
+
+```{r}
+
+```
+
+## part e
+Use the LASSO method to perform variable selection. Make sure you choose the "best lambda" to use and show how you determined this. 
+
+```{r}
+
+```
+
+## part f
+Compare the 'subsets' from parts c, d, and e and recommend a 'final' model. Using this 'final' model do the following:    
+
+*   Check the model assumptions.    
+*   Test the model predictive ability using a 10-fold cross-validation.   
+
+```{r}
+
+```
+
+## part g
+In a paragraph, summarize your findings to address the primary quetsion posed by the investigator (that has limited statistical knowledge).
