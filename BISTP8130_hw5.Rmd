@@ -7,6 +7,9 @@ output: github_document
 library(tidyverse)
 library(faraway)
 library(MASS)
+library(leaps)
+library(glmnet)
+library(caret)
 ```
 
 ```{r}
@@ -18,6 +21,7 @@ states = as.data.frame(datasets::state.x77) |>
 states$state = rownames(states)
 
 head(states)
+sum(is.na(states))
 ```
 
 *   population: population estimate   
@@ -30,6 +34,7 @@ head(states)
 *   area: land area (sq. miles)   
 
 # Problem 1
+R dataset state.x77 from library(faraway) contains information on 50 states from 1970s collected by US Census Bureau. The goal is to predict 'life expectancy' using a combination of remaining variables.
 
 ## part a
 Provide descriptive statistics for all variables of interest (continuous and categorical).
@@ -37,6 +42,9 @@ Provide descriptive statistics for all variables of interest (continuous and cat
 ```{r}
 summary(states)
 ```
+
+*   standard deviation    
+*   variance    
 
 ## part b
 Examine exploratory plots, e.g., scatter plots, histograms, box-plots to get a sense of the data and possible variable transformations. (Be selective! Even if you create 20 plots, you don't want to show them all). If you find a transformation to be necessary or recommended, perform the transformation and use it through the rest of the problem.
@@ -71,8 +79,9 @@ ggplot(states, aes(y = murder)) +
 
 ```{r}
 states = states |> 
-  mutate(log_population = log(population), 
-         log_area = log(area))
+  mutate(
+   log_population = ifelse(population > 0, log(population), NA),
+   log_area = ifelse(area > 0, log(area), NA))
 
 ggplot(states, aes(x = log_population, y = life_exp)) +
   geom_point(color = "purple", alpha = 0.7) +
@@ -91,22 +100,93 @@ Use automatic procedures to find a 'best subset' of the full model. Present the 
 *   Is there any association between 'Illiteracy' and 'HS graduation rate'? Does your 'subset' contain both?
 
 ```{r}
+full_model = lm(life_exp ~ ., data = states)
 
+# backward stepwise selection
+partial_model = lm(life_exp ~ population + income + illiteracy + murder + hs_grad + frost, data = states)
+summary(partial_model)
+
+backward_model = step(partial_model, direction = "backward")
+summary(backward_model)
 ```
+
+```{r}
+null_model = lm(life_exp ~ 1, data = states)
+
+# forward stepwise selection
+forward_model = step(null_model, scope = list(lower = null_model, upper = full_model), direction = "forward")
+summary(forward_model)
+```
+
+```{r}
+partial_both_model = lm(life_exp ~ population + income + illiteracy + murder + hs_grad + frost, data = states)
+summary(partial_both_model)
+
+both_model = step(partial_both_model, direction = "both")
+summary(both_model)
+```
+
+The forward, backward, and step AIC models are different depending on the direction of variable inclusion or exclusion, therefore, the procedures do not generate the same model. 
+
+The variables that are close calls are those whose inclusion or exclusion do no affect model fit, therefore, with high p-values or small changes in AIC. Income and illiteracy had high p-values in the stepAIC model. Whether to keep or discard depends on statistical significance and model performance, so for the stepAIC model, it would discarding income and illiteracy should be considered. 
+
+Illiteracy and HS Graduation Rate are suspected to be highly correlated as they both are part of education in a state. 
+
+```{r}
+cor(states[, "illiteracy"], states[, "hs_grad"])
+```
+
+Since the correlation between the two predictors is -0.6571886, this is a high correlation that indicates a strong negative relationship. This also means one of the variables should be dropped to avoid multicollinearity.
 
 ## part d
 Use criterion-based procedures to guide your selection of the 'best subset'. Summarize your results (tabular or graphical).
 
 ```{r}
+best_subset_model = regsubsets(life_exp ~ ., data = states, really.big = TRUE)
+summary(best_subset_model)
 
+reduced_states = states[, c("life_exp", "population", "illiteracy", "income", "murder", "hs_grad", "frost")]
+best_subset_model = regsubsets(life_exp ~ ., data = reduced_states)
+summary(best_subset_model)
 ```
+
+This method evaluates all possible combinations for predictors and shows the model the balances complexity and fit the best.
 
 ## part e
 Use the LASSO method to perform variable selection. Make sure you choose the "best lambda" to use and show how you determined this. 
 
 ```{r}
+# prepare for LASSO
+predictor_variables = states[, -which(names(states) == "life_exp")]
 
+response_variable = states$life_exp
 ```
+
+```{r}
+# convert to matrix format
+X = as.matrix(predictor_variables)
+Y = response_variable
+```
+
+```{r}
+# fit LASSO model and plot for cross-validation vs lambda
+lasso_model = cv.glmnet(X, Y, alpha = 1)
+plot(lasso_model)
+```
+
+```{r}
+best_lambda = lasso_model$lambda.min
+
+best_lambda
+```
+
+```{r}
+coefficients = coef(lasso_model, s = "lambda.min")
+
+print(coefficients)
+```
+
+The lambda.min value represents the value of lambda that minimizes the cross-validation error.
 
 ## part f
 Compare the 'subsets' from parts c, d, and e and recommend a 'final' model. Using this 'final' model do the following:    
@@ -115,8 +195,16 @@ Compare the 'subsets' from parts c, d, and e and recommend a 'final' model. Usin
 *   Test the model predictive ability using a 10-fold cross-validation.   
 
 ```{r}
+final_model = lm(life_exp ~ population + income + illiteracy + murder + hs_grad + frost, data = states)
+plot(final_model)
 
+# 10-fold cross-validation
+train_control = trainControl(method = "cv", number = 10)
+cv_model = train(life_exp ~ ., data = states, method = "lm", trControl = train_control)
+print(cv_model)
 ```
 
 ## part g
-In a paragraph, summarize your findings to address the primary quetsion posed by the investigator (that has limited statistical knowledge).
+In a paragraph, summarize your findings to address the primary question posed by the investigator (that has limited statistical knowledge).
+
+Of the different methods we tested, we included stepwise procedures, best subset selection and LASSO. The stepwise procedure is a systematic way to select variables, but it can be sensitive to starting models. The best subset selection identifies possible combinations for predictors and balances a model without overfitting. The LASSO method simplifies the model by decreasing less important variable coefficients to zero. Each method shows how predictors influence life expectancy, in which LASSO and best subset selection give more concise methods.
